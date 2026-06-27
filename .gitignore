@@ -2,6 +2,7 @@
 data/xml/
 data/manifest/
 data/annotations/
+__pycache__/
 
 # keep dirs
 !data/.gitkeep

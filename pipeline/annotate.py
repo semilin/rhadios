@@ -22,7 +22,7 @@ DEFAULT_MODEL = "google/gemini-3-flash-preview"
 PROMPT_TEMPLATE = """\
 You are making an immersive, in-language Attic Greek reader of {title} for early-intermediate students. Every gloss, definition, and summary is in Attic Greek — never English — so the student stays in the target language.
 
-You will receive a passage of a few Stephanus sections. Produce three things:
+You will receive {passage_desc}.{dialect_note} Produce three things:
 
 1. "summary": a brief, simplified Attic Greek paraphrase of the passage.
 
@@ -71,11 +71,41 @@ Passage:
 Respond with ONLY a JSON object of this shape: {{"summary": "...", "key_terms": [{{"lemma":"...","form":"...","gloss":"..."}}], "glosses": [["phrase","gloss"]]}}"""
 
 
+def prompt_vars(work_type: str | None) -> dict:
+    """Per-work-type substitutions for PROMPT_TEMPLATE.
+
+    The gloss/summary language is ALWAYS Attic (the learner's target dialect).
+    For epic the source text is Epic/Ionic, so a dialect note tells the model to
+    produce Attic help for Epic forms rather than mirroring the source dialect.
+    """
+    if work_type == "epic":
+        return {
+            "passage_desc": "a passage of roughly forty lines of dactylic hexameter",
+            "dialect_note": (
+                " The source text is Epic/Ionic Greek; every gloss, definition, "
+                "and summary must be in Attic \u2014 the learner's target dialect \u2014 "
+                "giving Attic equivalents for Epic forms where they differ."
+            ),
+        }
+    return {"passage_desc": "a passage of a few Stephanus sections", "dialect_note": ""}
+
+
 # --------------------------------------------------------------------------- #
 # chunking
 # --------------------------------------------------------------------------- #
-def build_chunks(segments: list[dict], sections_per_chunk: int) -> list[dict]:
-    """Group segments into chunks of N sections (by section_n), preserving order."""
+def build_chunks(segments: list[dict], sections_per_chunk: int,
+                  work_type: str | None = None) -> list[dict]:
+    """Group segments into chunks, preserving order.
+
+    Prose (dialogue): group by section_n, N sections per chunk.
+    Epic (verse): greedy line-budget cards that never split a speech or
+    narrative run; ``sections_per_chunk`` is repurposed as the target line count
+    per card (hardmax ~1.75x), flushing at book boundaries.
+    """
+    if work_type == "epic":
+        target = sections_per_chunk or 40
+        hardmax = max(int(target * 1.75), target + 30)
+        return build_chunks_epic(segments, target, hardmax)
     chunks: list[dict] = []
     cur: list[dict] = []
     cur_sections: list[str] = []
@@ -118,6 +148,57 @@ def _make_chunk(index: int, segs: list[dict], sections: list[str]) -> dict:
         "segment_refs": [s["ref"] for s in segs],
         "text": "\n\n".join(lines),
     }
+
+
+# --------------------------------------------------------------------------- #
+# epic verse chunker — greedy line budget, never splits a speech/narrative run
+# --------------------------------------------------------------------------- #
+def build_chunks_epic(segments: list[dict], target: int = 40,
+                      hardmax: int = 70) -> list[dict]:
+    """Accumulate whole segments (each a speech or narrative run) into cards of
+    ~``target`` lines, flushing when the target is reached, when the next unit
+    would exceed ``hardmax``, or when the book changes. A unit is never split."""
+    chunks: list[dict] = []
+    cur: list[dict] = []
+    cur_lines = 0
+    cur_book: str | None = None
+    for seg in segments:
+        n = len(seg.get("lines") or [])
+        book = seg.get("section_n")
+        if cur and (book != cur_book or cur_lines >= target
+                    or cur_lines + n > hardmax):
+            chunks.append(_epic_chunk(len(chunks), cur))
+            cur, cur_lines = [], 0
+        cur.append(seg)
+        cur_lines += n
+        cur_book = book
+    if cur:
+        chunks.append(_epic_chunk(len(chunks), cur))
+    return chunks
+
+
+def _epic_chunk(index: int, segs: list[dict]) -> dict:
+    books: list[str] = []
+    for s in segs:
+        b = s.get("section_n")
+        if b is not None and b not in books:
+            books.append(b)
+    chunk = _make_chunk(index, segs, books)
+    chunk["range"] = _epic_range(segs[0]["ref"], segs[-1]["ref"])
+    return chunk
+
+
+def _epic_range(first_ref: str, last_ref: str) -> str:
+    """'24.1-32' + '24.33-54' -> '24.1-54' (one book) / '23.760-24.40' (cross)."""
+    m1 = re.match(r"(\d+)\.(\d+)-(\d+)", first_ref or "")
+    m2 = re.match(r"(\d+)\.(\d+)-(\d+)", last_ref or "")
+    if not (m1 and m2):
+        return f"{first_ref}-{last_ref}"
+    b1, s1 = m1.group(1), m1.group(2)
+    b2, e2 = m2.group(1), m2.group(3)
+    if b1 == b2:
+        return f"{b1}.{s1}-{e2}"
+    return f"{b1}.{s1}-{b2}.{e2}"
 
 
 # --------------------------------------------------------------------------- #
@@ -183,10 +264,13 @@ def _validate(obj: dict) -> dict:
 
 
 def call_model(chunk_text: str, title: str, model: str, api_key: str,
-               introduced: list[str] | None = None) -> dict:
+               introduced: list[str] | None = None,
+               passage_desc: str = "a passage of a few Stephanus sections",
+               dialect_note: str = "") -> dict:
     prompt = PROMPT_TEMPLATE.format(
         title=title, chunk_text=chunk_text,
         introduced=_format_introduced(introduced or []),
+        passage_desc=passage_desc, dialect_note=dialect_note,
     )
     body = json.dumps(
         {
@@ -240,6 +324,23 @@ def _load_validated(path: str) -> dict | None:
         return None
 
 
+def introduced_from_cache(chunks: list[dict], work_id: str,
+                          ann_dir: str) -> tuple[list[str], int]:
+    """Rebuild the introduced key-term set from cached annotations of the given
+    chunks (best-effort: missing chunks contribute nothing). Returns
+    (lemmas, n_cached) — used to seed threading when annotating a subset
+    (e.g. one book) so words already taught in earlier books are not re-taught.
+    """
+    introduced: list[str] = []
+    n_cached = 0
+    for ch in chunks:
+        cached = _load_validated(_path_for(ann_dir, work_id, ch["index"]))
+        if cached is not None:
+            introduced = _merge_terms(introduced, cached)
+            n_cached += 1
+    return introduced, n_cached
+
+
 def annotate(
     chunks: list[dict],
     title: str,
@@ -249,11 +350,16 @@ def annotate(
     ann_dir: str,
     force: bool = False,
     limit: int | None = None,
+    passage_desc: str = "a passage of a few Stephanus sections",
+    dialect_note: str = "",
+    introduced_seed: list[str] | None = None,
 ) -> list[dict]:
     """Annotate chunks in order, threading already-introduced key terms forward.
 
     Sequential because chunk N's prompt depends on key terms from chunks 0..N-1.
     On resume, cached prefix chunks are read back to rebuild the introduced set.
+    ``introduced_seed`` pre-seeds that set (e.g. terms from earlier books when
+    annotating one book in isolation); it is folded in before the first chunk.
     """
     os.makedirs(ann_dir, exist_ok=True)
     results: dict[int, dict] = {}
@@ -282,8 +388,9 @@ def annotate(
     # Second pass: walk in index order, accumulating introduced key-term lemmas.
     # Cached chunks contribute their lemmas; pending chunks are annotated with
     # the current introduced set, then contribute their own. limit caps how
-    # many NEW annotations we perform.
-    introduced: list[str] = []
+    # many NEW annotations we perform. introduced_seed pre-loads terms from
+    # chunks outside this subset (e.g. earlier books) so they aren't re-taught.
+    introduced: list[str] = list(introduced_seed or [])
     annotated_this_run = 0
     for ch in chunks:
         idx = ch["index"]
@@ -298,7 +405,8 @@ def annotate(
             # over budget AND nothing cached to fold — stop entirely
             break
         try:
-            res = call_model(ch["text"], title, model, api_key, introduced)
+            res = call_model(ch["text"], title, model, api_key, introduced,
+                             passage_desc=passage_desc, dialect_note=dialect_note)
         except Exception as e:
             print(f"[annotate] FAILED chunk {idx:02d}: {e}")
             break  # later chunks would be missing their introduced context

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from . import greeknorm
 
 
@@ -98,6 +99,9 @@ def merge(work: dict, manifest: dict, annotations: list[dict | None], out_path: 
             cur_n = p["section_n"]
         cur["paragraphs"].append(p)
 
+    if work.get("type") == "epic" and len(sections) > 1:
+        return _write_epic(work, sections, summaries, out_path)
+
     doc = {
         "meta": {
             "id": work["id"],
@@ -119,3 +123,73 @@ def merge(work: dict, manifest: dict, annotations: list[dict | None], out_path: 
         f"{sum(len(s.get('key_terms',[])) for s in summaries)} key terms."
     )
     return doc
+
+
+# --------------------------------------------------------------------------- #
+# epic: split into per-book reader docs + a lightweight index.
+# Each book gets its own docs/<id>/<book>.json so the web app renders one book
+# at a time (a 24-book epic is an unmanageable single scroll). Annotation still
+# threads across all books; the split is a render/payload concern only.
+# --------------------------------------------------------------------------- #
+def _book_range(section: dict) -> str:
+    """Line span of a book from its paragraphs' refs: '24.1-804'."""
+    refs = [p["ref"] for p in section["paragraphs"] if p.get("ref")]
+    if not refs:
+        return ""
+    m1 = re.match(r"(\d+)\.(\d+)-(\d+)", refs[0])
+    m2 = re.match(r"(\d+)\.(\d+)-(\d+)", refs[-1])
+    if not (m1 and m2):
+        return ""
+    return f"{m1.group(1)}.{m1.group(2)}-{m2.group(3)}"
+
+
+def _write_epic(work: dict, sections: list[dict], summaries: list[dict],
+                out_path: str) -> dict:
+    """Write docs/<id>/<book>.json per book + docs/<id>.json index."""
+    books = [{"n": s["n"], "range": _book_range(s)} for s in sections]
+    base = os.path.dirname(out_path)
+    stem = os.path.basename(out_path)
+    stem = stem[:-5] if stem.endswith(".json") else stem
+    book_dir = os.path.join(base, stem)
+    os.makedirs(book_dir, exist_ok=True)
+
+    total_paras = 0
+    total_glossed = 0
+    for s in sections:
+        chunk_ids = {p["chunk"] for p in s["paragraphs"]}
+        book_summaries = [sm for sm in summaries if sm["chunk"] in chunk_ids]
+        doc = {
+            "meta": {
+                "id": work["id"],
+                "title": work["title"],
+                "author": work["author"],
+                "type": work["type"],
+                "book": s["n"],
+                "book_range": _book_range(s),
+                "books": books,
+            },
+            "sections": [s],
+            "summaries": book_summaries,
+        }
+        with open(os.path.join(book_dir, f"{s['n']}.json"), "w", encoding="utf-8") as f:
+            json.dump(doc, f, ensure_ascii=False, indent=2)
+        total_paras += len(s["paragraphs"])
+        total_glossed += sum(len(p.get("glosses", [])) for p in s["paragraphs"])
+
+    index = {
+        "meta": {
+            "id": work["id"],
+            "title": work["title"],
+            "author": work["author"],
+            "type": work["type"],
+        },
+        "books": books,
+    }
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(index, f, ensure_ascii=False, indent=2)
+    print(
+        f"[merge] wrote {len(sections)} book files to {book_dir}/ "
+        f"({total_paras} paragraphs, {total_glossed} inline gloss spans); "
+        f"index {out_path}."
+    )
+    return index

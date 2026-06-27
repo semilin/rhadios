@@ -163,13 +163,70 @@ def parse_drama(root) -> list[dict]:
 
 
 # --------------------------------------------------------------------------- #
-# Homer (dactylic hexameter)  — SEAM
+# Homer (dactylic hexameter) [implemented]
 #   <div book n="1"> ... <l n="1">...</l>; chunk by ~24-line cards.
 #   ref = "book.line" -> "Il.1.1"; speaker=None (narrator / character speech
 #   carried by <sp> in some editions).
 # --------------------------------------------------------------------------- #
 def parse_epic(root) -> list[dict]:
-    raise NotImplementedError(
-        "parse_epic: implement <div book>/<l n> extraction; group into ~24-line "
-        "cards; ref 'book.line'. Speaker from <sp> where present, else None."
-    )
+    """Homer hexameter. This Perseus edition encodes direct speech as <q> blocks
+    of <l> lines and narrative lines as direct children of <div subtype=Book>;
+    there is no <sp>/<speaker> markup, so speaker is None throughout (the
+    narrator's voice, the way the Iliad has been read for millennia) and <q> is
+    used only as a chunking signal. A segment is a maximal run of consecutive
+    lines of one kind (a speech, or a narrative block); ~40-line cards that
+    never split a speech are built by build_chunks_epic in annotate.py.
+    """
+    edition = _edition_root(root)
+    segments: list[dict] = []
+
+    for book in _iter_local(edition, "div"):
+        if book.get("subtype") != "Book":
+            continue
+        book_n = book.get("n")
+        q_ids = {id(q) for q in _iter_local(book, "q")}
+        parent = {id(c): id(p) for p in book.iter() for c in p}
+
+        def in_q(el) -> bool:
+            cur = id(el)
+            while cur in parent:
+                cur = parent[cur]
+                if cur in q_ids:
+                    return True
+            return False
+
+        # <l> in document order: (n, normalized text, inside-speech flag)
+        ordered: list[tuple[str | None, str, bool]] = []
+        for l in _iter_local(book, "l"):
+            txt = greeknorm.normalize_display(_inner_text(l))
+            if txt:
+                ordered.append((l.get("n"), txt, in_q(l)))
+
+        # group consecutive lines into maximal speech/narrative runs
+        units: list[list[tuple[str | None, str]]] = []
+        prev: bool | None = None
+        cur: list[tuple[str | None, str]] = []
+        for n, txt, iq in ordered:
+            if iq is not prev:
+                if cur:
+                    units.append(cur)
+                cur = []
+                prev = iq
+            cur.append((n, txt))
+        if cur:
+            units.append(cur)
+
+        for unit in units:
+            ls = [t for _, t in unit]
+            ref = f"{book_n}.{unit[0][0]}-{unit[-1][0]}"
+            segments.append(
+                {
+                    "speaker": None,
+                    "label": None,
+                    "ref": ref,
+                    "section_n": book_n,
+                    "text": "\n".join(ls),
+                    "lines": ls,
+                }
+            )
+    return segments

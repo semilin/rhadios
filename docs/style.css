@@ -40,13 +40,30 @@ main{max-width:42em;margin:0 auto;padding:2em 1.25em 6em}
 .vocab .vocab-caret::before{content:"▾"}
 .vocab.collapsed .vocab-caret::before{content:"▸"}
 .vocab-list{display:grid;grid-template-columns:auto 1fr;column-gap:1.3em;
-  row-gap:.35em;margin:0;padding:.6em .85em .8em}
+  row-gap:.3em;margin:0;padding:.55em .85em .7em;font-size:.93rem;line-height:1.45}
 .vocab.collapsed .vocab-list{display:none}
 .vocab-list dt{color:var(--ink);font-weight:600}
 .vocab-list dd{margin:0;color:var(--muted)}
 .works li a{display:block;padding:.9em .2em;border-bottom:1px solid var(--rule);
   text-decoration:none;color:var(--ink);font-size:1.25rem}
 .works li a small{display:block;color:var(--muted);font-size:.85rem;margin-top:.2em}
+
+/* βίβλος selector (multi-book works) */
+.book-nav{display:flex;align-items:center;gap:.6em;margin:0 0 1.6em;
+  padding:.5em .7em;border:1px solid var(--rule);border-radius:6px;
+  background:var(--summary-bg)}
+.book-nav .book-spacer{width:1.6em}
+.book-prev,.book-next{border:1px solid var(--rule);background:var(--paper);
+  color:var(--muted);font-size:1.2rem;line-height:1;padding:.15em .5em;
+  border-radius:5px;cursor:pointer;font-family:inherit;
+  transition:color .15s,border-color .15s}
+.book-prev:hover,.book-next:hover{color:var(--ink);border-color:var(--muted)}
+.book-sel{display:flex;align-items:baseline;gap:.5em;margin:0 auto}
+.book-sel .lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);font-weight:700}
+.book-select{font-family:var(--serif);font-size:1rem;color:var(--ink);
+  background:var(--paper);border:1px solid var(--rule);border-radius:5px;
+  padding:.2em .4em;cursor:pointer}
 
 /* section heading: Stephanus number */
 section.text-section h2{font-size:.78rem;letter-spacing:.08em;color:var(--muted);
@@ -74,7 +91,12 @@ p.speech{margin:0 0 .9em;text-indent:0}
 .summary .lab{display:block;font-size:.72rem;letter-spacing:.08em;color:var(--muted);
   text-transform:uppercase;margin-bottom:.3em}
 
-.verse{white-space:pre-line;margin:0 0 1em}
+/* verse: ref sits in a left gutter so it isn't squished inline with the hexameter */
+.verse-row{display:grid;grid-template-columns:4.2em 1fr;column-gap:.9em;margin:0 0 1em;
+  align-items:start}
+.verse-row .vref{color:var(--muted);font-size:.74rem;font-variant-numeric:tabular-nums;
+  text-align:right;padding-top:.15em;white-space:nowrap}
+.verse{white-space:pre-line;margin:0}
 .loading{color:var(--muted);font-style:italic;padding:3em 0}
 
 /* theme toggle */
@@ -82,3 +104,53 @@ p.speech{margin:0 0 .9em;text-indent:0}
   color:var(--muted);font-size:1.15rem;line-height:1;padding:.3em .55em;border-radius:6px;
   cursor:pointer;font-family:inherit;transition:color .15s,border-color .15s}
 #theme-toggle:hover{color:var(--ink);border-color:var(--muted)}
+
+/* print button (reader view only; visibility toggled via JS) */
+#print-btn{border:1px solid var(--rule);background:var(--paper);color:var(--muted);
+  font-size:1.05rem;line-height:1;padding:.32em .5em;border-radius:6px;cursor:pointer;
+  font-family:inherit;transition:color .15s,border-color .15s}
+#print-btn:hover{color:var(--ink);border-color:var(--muted)}
+
+/* print-only gloss margin notes: hidden on screen (tooltips are used instead) */
+.gn{display:none}
+.gloss-notes{display:none}
+
+/* small screens: shrink the vocab box and the verse ref gutter */
+@media (max-width:34em){
+  .vocab-list{font-size:.87rem;column-gap:1em;padding:.5em .7em .65em}
+  .vocab-head{padding:.45em .7em}
+  .verse-row{grid-template-columns:3.6em 1fr;column-gap:.6em}
+  .verse-row .vref{font-size:.7rem}
+}
+
+@media print{
+  /* force a light, ink-friendly palette regardless of the on-screen theme */
+  :root,[data-theme="dark"]{
+    --ink:#111;--muted:#555;--rule:#cfc8b8;--gloss:#6b4a12;--gloss-bg:#f4ecd6;
+    --paper:#fff;--summary-bg:#f4ecd6;--summary-border:#b89a3c;
+    --tip-bg:#111;--tip-fg:#fff;--header-bg:#fff;
+  }
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{margin:16mm 14mm}
+  header#topbar{display:none}
+  .book-nav{display:none}
+  main{max-width:none;margin:0;padding:0}
+  body{background:#fff;font-size:11.5pt;line-height:1.7}
+
+  .vocab,.summary{break-inside:avoid}
+  .vocab.collapsed .vocab-list{display:grid}   /* always show vocab in the PDF */
+  .vocab-caret{display:none}
+  section.text-section h2{break-after:avoid}
+
+  /* margin-gutter glosses instead of hover tooltips */
+  .gloss .tip{display:none !important}
+  .gn{display:inline;font-size:.62em;vertical-align:super;color:var(--gloss);
+    font-weight:700;margin-left:.05em}
+  .para{display:grid;grid-template-columns:1fr 8.5em;column-gap:1.15em}
+  .gloss-notes{display:block}
+  .gloss-notes ol{margin:.2em 0 0;padding-left:1.15em}
+  .gloss-notes li{font-size:.78rem;line-height:1.4;margin:0 0 .3em;break-inside:avoid}
+  .gloss-notes .gw{font-weight:700}
+  .gloss-notes .gt{color:#333}
+  .gloss{border-bottom:1.5px dotted var(--gloss)}
+}

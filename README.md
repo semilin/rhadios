@@ -27,7 +27,9 @@ Greek study.
    chunk's paragraphs (exact match first, then a fuzzy fallback that strips
    accents / normalizes elision so model drift still matches). Writes
    `docs/<id>.json` with pre-computed character offsets so the web app does
-   zero matching. Also refreshes `docs/works.json`.
+   zero matching. For multi-book works (epic), writes one reader doc per book
+   at `docs/<id>/<book>.json` plus a lightweight index at `docs/<id>.json`, so
+   each book is its own view. Also refreshes `docs/works.json`.
 
 ## Usage
 
@@ -40,8 +42,16 @@ python main.py all meno                 # fetch -> parse -> annotate -> merge
 # smoke-test one chunk before paying for the whole run:
 python main.py annotate meno --limit 1
 python main.py merge meno
+# annotate one book of a multi-book (epic) work; key-terms thread from
+# already-annotated earlier books so words aren't re-taught:
+python main.py annotate iliad --book 1 --limit 1   # smoke-test book 1
+python main.py annotate iliad --book 24             # all of book 24
+python main.py merge iliad
 # serve locally:
 cd docs && python -m http.server 8000
+# open a work:    http://localhost:8000/?w=meno
+# open a book:    http://localhost:8000/?w=iliad        (defaults to book 1)
+#                 http://localhost:8000/?w=iliad&b=24
 ```
 
 `--force` re-annotates (ignores the cache); `--limit N` annotates only the

@@ -4,9 +4,9 @@ Usage:
   python main.py list
   python main.py fetch   meno
   python main.py parse   meno
-  python main.py annotate meno [--force] [--limit N]
+  python main.py annotate meno [--force] [--limit N] [--book N]
   python main.py merge   meno
-  python main.py all     meno [--force] [--limit N]
+  python main.py all     meno [--force] [--limit N] [--book N]
 
 Run from the reader/ directory. OPENROUTER_API_KEY must be set for `annotate`.
 """
@@ -51,6 +51,7 @@ def get_work(cfg: dict, wid: str) -> dict:
     w = dict(w)
     w.setdefault("id", wid)
     w.setdefault("model", A.DEFAULT_MODEL)
+    w.setdefault("type", "dialogue")
     w.setdefault("sections_per_chunk", 3)
     return w
 
@@ -83,7 +84,7 @@ def cmd_parse(cfg, args):
     if not os.path.exists(xml_path):
         P.fetch_work(w["cts"], XML_DIR)
     segments = P.parse(xml_path, w["type"])
-    chunks = A.build_chunks(segments, w["sections_per_chunk"])
+    chunks = A.build_chunks(segments, w["sections_per_chunk"], w["type"])
     os.makedirs(MANIFEST_DIR, exist_ok=True)
     manifest = {
         "work_id": w["id"],
@@ -100,14 +101,44 @@ def cmd_parse(cfg, args):
     print(f"[parse] {len(segments)} segments -> {len(chunks)} chunks -> {manifest_path(w['id'])}")
 
 
+def _book_chunks(manifest: dict, book) -> tuple[list[dict], list[dict]]:
+    """Split a manifest's chunks into (target, prefix) for the given book.
+
+    target = chunks whose ``section_ns`` contains the book (e.g. epic book 24);
+    prefix = every chunk before the first target chunk, used to seed key-term
+    threading from already-annotated earlier books. Exits if no match.
+    """
+    chunks = manifest["chunks"]
+    key = str(book)
+    target = [c for c in chunks if key in (c.get("section_ns") or [])]
+    if not target:
+        sys.exit(f"no chunks for book {book!r} in manifest "
+                 f"{manifest.get('work_id', '?')!r}")
+    first_idx = target[0]["index"]
+    prefix = [c for c in chunks if c["index"] < first_idx]
+    return target, prefix
+
+
 def cmd_annotate(cfg, args):
     w = get_work(cfg, args.work)
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         sys.exit("OPENROUTER_API_KEY is not set.")
     manifest = json.load(open(manifest_path(w["id"]), encoding="utf-8"))
+    pv = A.prompt_vars(w.get("type"))
+    chunks = manifest["chunks"]
+    seed: list[str] = []
+    if args.book is not None:
+        target, prefix = _book_chunks(manifest, args.book)
+        seed, n_cached = A.introduced_from_cache(prefix, w["id"], ANN_DIR)
+        chunks = target
+        print(f"[annotate] book {args.book}: {len(target)} chunks to annotate; "
+              f"threading from {n_cached}/{len(prefix)} cached prefix chunks")
+        if n_cached < len(prefix):
+            print(f"[annotate]   note: {len(prefix) - n_cached} earlier chunk(s) "
+                  "are not annotated — key-term threading is best-effort")
     A.annotate(
-        chunks=manifest["chunks"],
+        chunks=chunks,
         title=w["title"],
         work_id=w["id"],
         model=w["model"],
@@ -115,6 +146,9 @@ def cmd_annotate(cfg, args):
         ann_dir=ANN_DIR,
         force=args.force,
         limit=args.limit,
+        passage_desc=pv["passage_desc"],
+        dialect_note=pv["dialect_note"],
+        introduced_seed=seed,
     )
 
 
@@ -161,14 +195,19 @@ def main():
     def work_args(p):
         p.add_argument("work")
 
+    def book_args(p):
+        p.add_argument("--book", "-b", default=None, metavar="N",
+                       help="annotate only the given book (epic); threads key-terms "
+                            "from cached earlier books")
+
     p = sub.add_parser("fetch"); work_args(p); p.set_defaults(func=cmd_fetch)
     p = sub.add_parser("parse"); work_args(p); p.set_defaults(func=cmd_parse)
-    p = sub.add_parser("annotate"); work_args(p)
+    p = sub.add_parser("annotate"); work_args(p); book_args(p)
     p.add_argument("--force", action="store_true")
     p.add_argument("--limit", type=int, default=None)
     p.set_defaults(func=cmd_annotate)
     p = sub.add_parser("merge"); work_args(p); p.set_defaults(func=cmd_merge)
-    p = sub.add_parser("all"); work_args(p)
+    p = sub.add_parser("all"); work_args(p); book_args(p)
     p.add_argument("--force", action="store_true")
     p.add_argument("--limit", type=int, default=None)
     p.set_defaults(func=cmd_all)
