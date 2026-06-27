@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="grc">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ῥᾳδίως — Ἀττικὴ ἀνάγνωσις</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gentium+Plus:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>
+  // Set theme before paint to avoid FOUC. Honors saved choice, else OS preference.
+  (function(){
+    var s = localStorage.getItem('rhadios-theme');
+    if (s !== 'light' && s !== 'dark')
+      s = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', s);
+  })();
+</script>
+</head>
+<body>
+<header id="topbar">
+  <a href="?">⟵ Works</a>
+  <span id="title"></span>
+  <span id="author"></span>
+  <button id="theme-toggle" type="button" aria-label="Toggle theme"></button>
+</header>
+<main id="app"></main>
+<script src="app.js"></script>
+</body>
+</html>

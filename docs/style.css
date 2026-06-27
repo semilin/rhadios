@@ -1,0 +1,84 @@
+:root{
+  --ink:#1a1a1a; --muted:#6b6b6b; --rule:#e3ddd0;
+  --gloss:#7a5c1e; --gloss-bg:#fbf3df; --paper:#faf6ee;
+  --header-bg:rgba(250,246,238,.94);
+  --summary-bg:#f1ead8; --summary-border:#c9a84c;
+  --tip-bg:#1a1a1a; --tip-fg:#fff;
+  --serif:"Gentium Plus","Palatino Linotype","Book Antiqua",Palatino,"Noto Serif",serif;
+}
+[data-theme="dark"]{
+  --ink:#e8e2d4; --muted:#9a9183; --rule:#3a3530;
+  --gloss:#d4a84e; --gloss-bg:#2a2418; --paper:#1a1a17;
+  --header-bg:rgba(26,26,23,.94);
+  --summary-bg:#2a2418; --summary-border:#8a6f30;
+  --tip-bg:#e8e2d4; --tip-fg:#1a1a1a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--serif);
+  font-size:1.21rem;line-height:1.9;-webkit-text-size-adjust:100%}
+header#topbar{position:sticky;top:0;z-index:5;display:flex;align-items:baseline;gap:1em;
+  padding:.7em 1.1em;background:var(--header-bg);border-bottom:1px solid var(--rule);
+  font-size:.92rem;color:var(--muted)}
+header#topbar #title{font-size:1.15rem;color:var(--ink)}
+header#topbar a{color:var(--muted);text-decoration:none}
+main{max-width:42em;margin:0 auto;padding:2em 1.25em 6em}
+
+.works{list-style:none;padding:0}
+
+/* vocab box (key terms, shown before each chunk). Visible by default,
+   collapsible via its header. Pinning (float-on-scroll) is a future add. */
+.vocab{margin:0 0 1.4em;border:1px solid var(--rule);border-radius:6px;
+  overflow:hidden;background:var(--summary-bg)}
+.vocab-head{display:flex;align-items:baseline;gap:.6em;padding:.5em .85em;
+  cursor:pointer;user-select:none;border-bottom:1px solid var(--rule)}
+.vocab.collapsed .vocab-head{border-bottom:none}
+.vocab-head:hover .vocab-lab{color:var(--ink)}
+.vocab-lab{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);font-weight:700;transition:color .12s}
+.vocab-range{font-size:.72rem;color:var(--muted)}
+.vocab-caret{margin-left:auto;color:var(--muted);font-size:.8rem;line-height:1}
+.vocab .vocab-caret::before{content:"▾"}
+.vocab.collapsed .vocab-caret::before{content:"▸"}
+.vocab-list{display:grid;grid-template-columns:auto 1fr;column-gap:1.3em;
+  row-gap:.35em;margin:0;padding:.6em .85em .8em}
+.vocab.collapsed .vocab-list{display:none}
+.vocab-list dt{color:var(--ink);font-weight:600}
+.vocab-list dd{margin:0;color:var(--muted)}
+.works li a{display:block;padding:.9em .2em;border-bottom:1px solid var(--rule);
+  text-decoration:none;color:var(--ink);font-size:1.25rem}
+.works li a small{display:block;color:var(--muted);font-size:.85rem;margin-top:.2em}
+
+/* section heading: Stephanus number */
+section.text-section h2{font-size:.78rem;letter-spacing:.08em;color:var(--muted);
+  font-weight:600;margin:2.4em 0 .6em;border-top:1px solid var(--rule);padding-top:.8em}
+
+p.speech{margin:0 0 .9em;text-indent:0}
+.speaker{font-weight:700;font-variant:small-caps;letter-spacing:.02em;
+  color:var(--muted);margin-right:.5em}
+.ref{color:var(--muted);font-size:.72em;vertical-align:super;margin-left:.15em}
+
+/* glosses */
+.gloss{border-bottom:1.5px dotted var(--gloss);cursor:help;position:relative;
+  border-radius:2px}
+.gloss:hover,.gloss.show{background:var(--gloss-bg)}
+.gloss .tip{display:none;position:absolute;left:50%;bottom:130%;transform:translateX(-50%);
+  background:var(--tip-bg);color:var(--tip-fg);font-family:var(--serif);font-size:.95rem;line-height:1.4;
+  padding:.35em .6em;border-radius:5px;white-space:nowrap;z-index:10;pointer-events:none}
+.gloss .tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+  border:5px solid transparent;border-top-color:var(--tip-bg)}
+.gloss:hover .tip,.gloss.show .tip{display:block}
+
+/* summary callout */
+.summary{background:var(--summary-bg);border-left:3px solid var(--summary-border);padding:.7em 1em;
+  margin:2em 0 1.4em;font-size:1.04rem;line-height:1.7;border-radius:3px}
+.summary .lab{display:block;font-size:.72rem;letter-spacing:.08em;color:var(--muted);
+  text-transform:uppercase;margin-bottom:.3em}
+
+.verse{white-space:pre-line;margin:0 0 1em}
+.loading{color:var(--muted);font-style:italic;padding:3em 0}
+
+/* theme toggle */
+#theme-toggle{margin-left:auto;border:1px solid var(--rule);background:var(--paper);
+  color:var(--muted);font-size:1.15rem;line-height:1;padding:.3em .55em;border-radius:6px;
+  cursor:pointer;font-family:inherit;transition:color .15s,border-color .15s}
+#theme-toggle:hover{color:var(--ink);border-color:var(--muted)}

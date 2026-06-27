@@ -1,0 +1,35 @@
+# rhadios works catalog.
+# `type` selects the parse adapter in pipeline/perseus.py:
+#   dialogue  -> Plato prose (<div section> + <p><said><label>)
+#   drama     -> Sophocles/Euripides verse (<sp><speaker><l n>)   [SEAM: stub]
+#   epic      -> Homer hexameter (<div book>/<l n>, card chunks)  [SEAM: stub]
+# `sections_per_chunk` controls chunk size (N sections for prose, ignored/
+# repurposed by drama/epic adapters).
+
+[work.meno]
+id      = "meno"
+cts     = "tlg0059.tlg024.perseus-grc2"
+title   = "Μένων"
+author  = "Πλάτων"
+type    = "dialogue"
+sections_per_chunk = 1
+model   = "google/gemini-3-flash-preview"
+
+# --- future works (will need their parse_<type> adapter implemented) --------
+# [work.antigone]
+# id = "antigone"
+# cts = "tlg0011.tlg002.perseus-grc2"
+# title = "Ἀντιγόνη"
+# author = "Σοφοκλῆς"
+# type = "drama"
+# sections_per_chunk = 1   # one card per chunk
+# model = "google/gemini-3-flash-preview"
+#
+# [work.iliad]
+# id = "iliad"
+# cts = "tlg0012.tlg001.perseus-grc2"
+# title = "Ἰλιάς"
+# author = "Ὅμηρος"
+# type = "epic"
+# sections_per_chunk = 24   # ~24 lines per chunk (card-sized)
+# model = "google/gemini-3-flash-preview"

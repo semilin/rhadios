@@ -1,0 +1,7 @@
+# cache + working data (not committed)
+data/xml/
+data/manifest/
+data/annotations/
+
+# keep dirs
+!data/.gitkeep
